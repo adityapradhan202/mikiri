@@ -1,10 +1,8 @@
-## 1. Basics
-
 Go to OAuth2 URL generator tab in developer portal.  
 Under scope: Select bot and application.commands for slash command.  
 Initially give permissions like - send messsages, read message history, view channels, slash commands.
 
-### 1.1 First discord bot.
+### 1. First discord bot.
 ```py
 import discord
 
@@ -23,7 +21,7 @@ client.run(TOKEN)
 * on_ready() — Called when the client is ready.
 * client.run(TOKEN) — Starts the bot.
 
-### 1.2 Understanding commands.Bot and events.
+### 2. Understanding commands.Bot and events.
 
 Code example:
 
@@ -132,7 +130,7 @@ def main() -> None:
 * Functions like `on_message`, `on_message_edit`, `on_message_delete`, `on_member_remove` are all predefined event function in discord.py module.
 * Must read the last line of `on_message` function and understand why this line has been written there.
 
-### 1.3 Prefix command, context object, prefix command with args
+### 3. Prefix command, context object, prefix command with args
 
 See this code:
 
@@ -194,4 +192,133 @@ ctx.bot
 ctx.command
 ctx.prefix
 etc.
+```
+
+### 4. Error handling.
+
+```py
+@bot.event
+async def on_command_error(ctx, error):
+    await ctx.send(f"An error occurred: {error}")
+
+# This runs when some error occurs while using commands
+```
+
+### 5. Slash commands basics and learning another way of initializing a bot.
+
+```py
+import os
+import discord
+from discord.ext import commands
+from dotenv import load_dotenv
+
+load_dotenv()
+token = os.getenv("TOKEN")
+
+# this is the id of discord server where we are developing
+DEV_GUILD = discord.Object(id=1573584733588422829)
+
+class MyBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.members = True
+        intents.presences = True
+        intents.message_content = True
+
+        super().__init__(
+            command_prefix="!", intents=intents
+        )
+
+    async def setup_hook(self):
+
+        # Use these two lines given in command if u accedetnly sync globally to all guilds
+        # It takes a lot of time to update
+        # To test rapidly use DEV_GUILD
+
+        # self.tree.clear_commands(guild=None)   # clear GLOBAL commands only
+        # await self.tree.sync()                 # push empty global list to Discord
+
+        # sync the slash commands to the development guild
+        await self.tree.sync(guild=DEV_GUILD)
+
+bot = MyBot()
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+
+# Prefix command
+@bot.command()
+async def hello(ctx):
+    await ctx.send("Hello from prefix command!")
+
+# You must mention the development server, to rapidly update it in the development server! (A must)
+# Slash command
+@bot.tree.command(name="ping", guild=DEV_GUILD)
+async def ping(interaction:discord.Interaction):
+    await interaction.response.send_message("Pong!")
+
+@bot.tree.command(name="bully", guild=DEV_GUILD)
+async def bully(interaction:discord.Interaction):
+    await interaction.response.send_message("Woahh... who the hell are you calling a bully yo?")
+
+# discord.Interaction object is the central hub for handling everything that happens when a user triggers a slash command.
+# With the help of interaction object we can access the following.
+
+
+bot.run(token)
+```
+
+* `setup_hook() -> lifecycle function, it runs whatever is mentioned inside this function after the bots logs in and before the bot connects to the discord websocket(or gateway).
+* Initialize db, sync slash commands globally, or for rapid development sync slash command to development server.
+
+
+**This is how you can send arguments in slash command.**
+
+```py
+# name and str are required arguments
+@bot.tree.command(name="greet", guild=DEV_GUILD)
+async def greet(interaction:discord.Interaction, name:str, age:int):
+    await interaction.response.send_message(f"Your name is {name}, you are {age} years old!")
+
+# optional arguments
+# to set argumetns as optional, make them default arguments, and set the default value to None
+@bot.tree.command(name="vent", guild=DEV_GUILD)
+async def vent(interaction:discord.Interaction, what_happend:str, about_you:str=None):
+    message = ""
+    if about_you:
+        message += (about_you + "\n\n")
+    message += f"What happened:\n{what_happend}"
+    await interaction.response.send_message(message)
+
+```
+
+
+### 6. Cooldown on slash commands, and handling cooldown error.
+
+Look at this code example.
+
+
+```py
+
+from discord import app_commands
+
+# 1 time per 10 seconds, and key parameter stands for who gets their own cooldown
+# Here individual user get their own cooldown.
+@bot.tree.command(name="ping", guild=DEV_GUILD)
+@app_commands.checks.cooldown(rate=1, per=10, key=lambda interaction: interaction.user.id)
+async def ping(interaction:discord.Interaction):
+    await interaction.response.send_message("Pong!")
+
+# Now if somebody hits the limit, it throws a cooldown error
+# This is how we handle that error
+# Use a decorator with the same name as the slash command
+@ping.error
+async def ping_error(interaction:discord.Interaction, error:app_commands.AppCommandError):
+    if isinstance(error, app_commands.CommandOnCooldown):
+        await interaction.response.send_message(
+            content=f"Slow down try again later, after {error.retry_after} seconds!",
+            # ephemeral means the user who invoked the command seens the message.
+            ephemeral=True 
+        )
 ```
