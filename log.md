@@ -322,3 +322,135 @@ async def ping_error(interaction:discord.Interaction, error:app_commands.AppComm
             ephemeral=True 
         )
 ```
+
+### 7. Cogs
+
+We can organise the code using cogs.
+
+Project structure:
+```
+mikiri(main package)
+|__ __init__.py
+|__ main.py
+|__ cogs
+   |__ __init__.py
+   |__ general.py
+   |__ fun.py
+   |__ config.py
+```
+
+Now the code.
+
+**mikiri/cogs/config.py**
+
+```py
+from discord import Object
+
+DEV_GUILD = Object(id=1575563960546234459)
+
+```
+
+**mikiri/cogs/general.py**
+
+```py
+
+import discord
+from discord.ext import commands
+from discord import app_commands
+
+from mikiri.cogs.config import DEV_GUILD
+
+# Inside cogs it is recommanded to use app_commands.command decorator.
+# not bot.tree.command -> this registers it directly to bot's command tree.
+
+class General(commands.Cog):
+
+    # Takes the bot as argument for initialization
+    def __init__(self, bot):
+        self.bot = bot
+
+    @app_commands.command(name="ping", description="pings the bot")
+    @app_commands.guilds(DEV_GUILD)
+    async def ping(self, interaction:discord.Interaction):
+        await interaction.response.send_message("Pong!")
+
+# We will see 'load_extension' function in main.py
+# That functon runs the setup function. This setup function connects the cogs to the bot.
+async def setup(bot):
+    await bot.add_cog(General(bot))
+
+
+```
+
+
+**mikiri/cogs/fun.py**
+
+```py
+
+import discord
+from discord.ext import commands
+from discord import app_commands
+from mikiri.cogs.config import DEV_GUILD
+
+import random
+
+
+class Fun(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    @app_commands.command(name="roll", description="Rolls a dice")
+    @app_commands.guilds(DEV_GUILD)
+    async def ping(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f"Rolled the dice and you got a {random.randint(1,6)}")
+
+
+async def setup(bot):
+    await bot.add_cog(Fun(bot))
+
+```
+
+
+**mikiri/main.py**
+
+```py
+
+import os
+import discord
+from discord.ext import commands
+from dotenv import load_dotenv
+from discord import app_commands
+
+from mikiri.cogs.config import DEV_GUILD
+
+load_dotenv()
+token = os.getenv("TOKEN")
+
+class Mybot(commands.Bot):
+
+    def __init__(self):
+
+        intents = discord.Intents.default()
+        intents.presences = True
+        intents.message_content = True
+        intents.members = True
+
+        super().__init__(
+            command_prefix="!", intents=intents
+        )
+
+    async def setup_hook(self):
+
+        # load_extension function calls the setup function given inside the cogs
+        await self.load_extension("mikiri.cogs.general") # mikiri is main package, general stands for general.py
+        await self.load_extension("mikiri.cogs.fun")
+
+        await self.tree.sync(guild=DEV_GUILD)
+
+
+bot = Mybot()
+bot.run(token)
+
+
+```
